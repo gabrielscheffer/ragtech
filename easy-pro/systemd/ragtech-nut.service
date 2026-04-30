@@ -1,0 +1,42 @@
+# Systemd unit para o bridge Ragtech → NUT
+# Caminho: /etc/systemd/system/ragtech-nut.service
+#
+# Inicia o script em modo daemon e reinicia em caso de falha.
+# Roda ANTES do nut-driver para garantir que o arquivo de dados exista.
+
+[Unit]
+Description=Ragtech Easy Pro 1200VA → NUT bridge
+Documentation=https://github.com/gabrielscheffer/ragtech
+After=multi-user.target
+Before=nut-driver@ragtech.service
+
+# Aguarda o /dev/ups0 estar disponível (criado pelo udev)
+Requires=dev-ups0.device
+After=dev-ups0.device
+
+[Service]
+Type=simple
+User=nut
+Group=nut
+
+ExecStart=/usr/local/bin/ragtech-nut.py \
+    --port /dev/ups0 \
+    --baud 2560 \
+    --data-file /var/lib/nut/ragtech.dev \
+    --interval 5
+
+Restart=on-failure
+RestartSec=10s
+
+# Hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/nut
+
+# Permissão para acessar a porta serial
+SupplementaryGroups=dialout
+
+[Install]
+WantedBy=multi-user.target

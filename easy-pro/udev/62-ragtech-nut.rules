@@ -1,0 +1,12 @@
+# Regra udev para Ragtech Easy Pro 1200VA
+# Caminho: /etc/udev/rules.d/62-ragtech-nut.rules
+#
+# - Cria symlink estável /dev/ups0 (independente da numeração ttyACM)
+# - Define permissões para o usuário nut
+# - Aplica para o vendor/product ID confirmado: Microchip 04d8:000a (CDC ACM)
+
+SUBSYSTEM=="tty", ATTRS{idVendor}=="04d8", ATTRS{idProduct}=="000a", \
+    SYMLINK+="ups0", \
+    MODE="0660", \
+    GROUP="nut", \
+    TAG+="systemd"

@@ -1,0 +1,15 @@
+# /etc/nut/upsd.users
+# Usuários autorizados a se conectar ao upsd
+#
+# IMPORTANTE: trocar as senhas antes de usar!
+# Permissões do arquivo: chmod 640, chown root:nut
+
+[upsmon]
+    password = TROCAR_SENHA_UPSMON
+    upsmon master
+
+# Usuário admin para comandos manuais (opcional)
+[admin]
+    password = TROCAR_SENHA_ADMIN
+    actions = SET
+    instcmds = ALL
