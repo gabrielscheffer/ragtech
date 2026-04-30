@@ -37,7 +37,7 @@ DEFAULT_PORT = "/dev/ups0"  # symlink criado por udev
 DEFAULT_BAUD = 2560
 DEFAULT_DATA_FILE = "/var/lib/nut/ragtech.dev"
 DEFAULT_INTERVAL = 5  # segundos entre leituras
-DEFAULT_TIMEOUT = 5
+DEFAULT_TIMEOUT = 10
 
 # Calibração Easy Pro 1200VA @ 220V
 # Validado: byte 211 → 225V real (multímetro)
@@ -141,7 +141,7 @@ def read_once(ser: serial.Serial) -> bytes:
     """Envia request e lê resposta do nobreak."""
     ser.reset_input_buffer()
     ser.write(REQUEST_COMMAND)
-    time.sleep(2)
+    time.sleep(3)
     return ser.read(64)
 
 
