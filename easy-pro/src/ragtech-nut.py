@@ -14,7 +14,8 @@ Bytes mapeados no frame de 31 bytes (header aa21):
     offset 12  → input.voltage    (byte * INPUT_FACTOR)
     offset 14  → ups.load         (% aproximado)
     offset 24  → ups.temperature  (°C diretos)
-    offset 29  → status flags     (bit 4 = charging, bit 5 = on battery)
+    offset 29  → status flags     (bit 4 = charging, bit 5 = on battery — transitório)
+                                   detecção primária de OB: input.voltage < LOW_INPUT_THRESHOLD
     offset 30  → output.voltage   (byte * INPUT_FACTOR)
 
 Referências:
@@ -43,10 +44,14 @@ DEFAULT_TIMEOUT = 10
 # Validado: byte 211 → 225V real (multímetro)
 INPUT_FACTOR = 1.0664
 INPUT_NOMINAL = 220
+# Abaixo de 85% da tensão nominal = sem rede. O bit FLAG_ON_BATTERY é transitório
+# (firmware zera após alguns minutos em bateria), então input.voltage é a fonte primária.
+LOW_INPUT_THRESHOLD = INPUT_NOMINAL * 0.85  # 187V
+
 # Comando de request do protocolo
 REQUEST_COMMAND = bytes.fromhex("AA0400801E9E")
 
-# Flags do byte de status (offset 28)
+# Flags do byte de status (offset 29)
 FLAG_CHARGING = 0x10  # bit 4
 FLAG_ON_BATTERY = 0x20  # bit 5
 
@@ -65,13 +70,16 @@ def parse_frame(data: bytes) -> dict | None:
         logging.warning("Sync byte inválido: 0x%02x", data[0])
         return None
 
-    if data[1] != 0x21:
+    # 0xaa21: normal; 0xaa61: observado em descarga/carga intensa — mesmo layout
+    if data[1] not in (0x21, 0x61):
         logging.warning(
-            "Header inesperado 0xaa%02x — esperado 0xaa21. "
+            "Header desconhecido 0xaa%02x — frame ignorado. "
             "Modelo diferente? Veja post #44 do fórum HA.",
             data[1],
         )
         return None
+    if data[1] != 0x21:
+        logging.debug("Header alternativo 0xaa%02x (normal em carga/descarga intensa)", data[1])
 
     battery_charge = round(data[8] * 0.393)
     battery_charge = max(0, min(100, battery_charge))
@@ -82,7 +90,7 @@ def parse_frame(data: bytes) -> dict | None:
     load = data[14]
     flags = data[29]
 
-    on_battery = bool(flags & FLAG_ON_BATTERY)
+    on_battery = bool(flags & FLAG_ON_BATTERY) or (input_voltage < LOW_INPUT_THRESHOLD)
     charging = bool(flags & FLAG_CHARGING)
 
     # Status NUT-style
@@ -142,7 +150,11 @@ def read_once(ser: serial.Serial) -> bytes:
     ser.reset_input_buffer()
     ser.write(REQUEST_COMMAND)
     time.sleep(3)
-    return ser.read(64)
+    data = ser.read(64)
+    if len(data) < 31:
+        time.sleep(0.5)
+        data += ser.read(31 - len(data))
+    return data
 
 
 def run_daemon(
