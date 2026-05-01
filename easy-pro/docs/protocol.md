@@ -28,9 +28,15 @@ Outros baudrates aceitos pelo Supervise (não testados aqui): 2400, 2048.
 AA 04 00 80 1E 9E
 ```
 
-Resposta: frame de **31 bytes** começando com `aa21` (no Easy Pro 1200VA).
+Resposta: frame de **31 bytes**. O segundo byte (`data[1]`) varia conforme o estado do UPS — todos os frames usam o mesmo layout de offsets.
 
-> Modelos diferentes podem retornar com header diferente. Ex: alguns NEP 1200s respondem com `aa01`.
+| Segundo byte | Estado observado |
+|---|---|
+| `0x21` | Operação normal (OL / OB) |
+| `0x61` | Descarga/carga intensa |
+| `0x09` | Carga após descarga total (bateria <20%) |
+
+> Modelos diferentes podem retornar `aa01`. Ex: alguns NEP 1200s.
 
 ---
 
@@ -60,7 +66,6 @@ aa 21 00 0c 00 00 be f3 ff 00 08 c6 d3 03 02 35 f8 00 00 01 82 c2 01 9c 19 00 d3
 | 25-27 | varia | bytes | Desconhecido | — | — |
 | 28 | varia | byte | Desconhecido | — | — |
 | 29 | `07` | byte | **Status flags** | bitfield | ✅ |
-| 29 | varia | byte | Desconhecido | — | — |
 | 30 | `d3` | byte | `output.voltage` (V) | `byte * INPUT_FACTOR` | ✅ |
 
 ### Calibração
@@ -75,21 +80,34 @@ Saída em modo OB mantida pela bateria em ~221V.
 
 ### Status flags (offset 29)
 
-Bitfield de 8 bits com pelo menos 2 bits identificados:
+Bitfield de 8 bits com 2 bits identificados:
 
-| Bit | Mask | Significado | Validação |
+| Bit | Mask | Significado |
+|---|---|---|
+| 4 | `0x10` | `CHARGING` — carregando bateria |
+| 5 | `0x20` | `BATTERY_ACTIVE` — bateria no circuito |
+
+**Interpretação combinada (validada experimentalmente):**
+
+| bit5 | bit4 | Estado NUT | Observação |
 |---|---|---|---|
-| 4 | `0x10` | `CHARGING` (carregando bateria) | ✅ ativo após retorno da rede com bateria <100% |
-| 5 | `0x20` | `ON_BATTERY` (modo bateria) | ✅ ativo quando rede ausente |
+| 0 | 0 | `OL` | Rede presente, bateria 100% |
+| 1 | 0 | `OB DISCHRG` | Sem rede, alimentando pela bateria |
+| 1 | 1 | `OL CHRG` | Rede presente, carregando bateria |
 
-Valores observados:
-| Valor | Estado |
+> **Nota:** bit5 sozinho não significa "sem rede" — ele também é setado durante carga. A detecção de OB usa `input.voltage < 187V` como fonte primária, pois o firmware zera bit5 após alguns minutos em bateria.
+
+Valores observados do byte completo:
+| Valor hex | Estado |
 |---|---|
-| `0x07` | OL idle, bateria 100% |
-| `0x27` | OB (sem rede) |
-| `0x34` | OL CHRG (rede voltou, carregando) |
+| `0x07` | OL idle |
+| `0x20` | OB (transição inicial — bit5 transitório) |
+| `0x27` | OB DISCHRG |
+| `0x34` | OL CHRG |
+| `0x3a` | OL CHRG (carga após descarga total) |
+| `0x00` | OB DISCHRG (firmware zerou flags — detectado por input.voltage) |
 
-Bits 0, 1, 2 ainda não totalmente decodificados.
+Bits 0, 1, 2, 3 não decodificados.
 
 ---
 
