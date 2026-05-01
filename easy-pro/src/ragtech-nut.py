@@ -70,8 +70,8 @@ def parse_frame(data: bytes) -> dict | None:
         logging.warning("Sync byte inválido: 0x%02x", data[0])
         return None
 
-    # 0xaa21: normal; 0xaa61: observado em descarga/carga intensa — mesmo layout
-    if data[1] not in (0x21, 0x61):
+    # Bytes conhecidos: 0x21 normal, 0x61 descarga/carga intensa, 0x09 carga após descarga total
+    if data[1] not in (0x21, 0x61, 0x09):
         logging.warning(
             "Header desconhecido 0xaa%02x — frame ignorado. "
             "Modelo diferente? Veja post #44 do fórum HA.",
@@ -79,7 +79,7 @@ def parse_frame(data: bytes) -> dict | None:
         )
         return None
     if data[1] != 0x21:
-        logging.debug("Header alternativo 0xaa%02x (normal em carga/descarga intensa)", data[1])
+        logging.debug("Header alternativo 0xaa%02x", data[1])
 
     battery_charge = round(data[8] * 0.393)
     battery_charge = max(0, min(100, battery_charge))
@@ -90,7 +90,10 @@ def parse_frame(data: bytes) -> dict | None:
     load = data[14]
     flags = data[29]
 
-    on_battery = bool(flags & FLAG_ON_BATTERY) or (input_voltage < LOW_INPUT_THRESHOLD)
+    # bit5 sozinho = OB; bit4+bit5 juntos = OL CHRG (carregando após retorno da rede)
+    on_battery = (bool(flags & FLAG_ON_BATTERY) and not bool(flags & FLAG_CHARGING)) or (
+        input_voltage < LOW_INPUT_THRESHOLD
+    )
     charging = bool(flags & FLAG_CHARGING)
 
     # Status NUT-style
