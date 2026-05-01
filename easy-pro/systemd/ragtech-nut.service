@@ -19,6 +19,10 @@ Type=simple
 User=nut
 Group=nut
 
+# Remove dados stale do shutdown anterior — evita que o nut-driver sirva
+# estado crítico antigo antes do bridge escrever a primeira leitura fresca.
+ExecStartPre=/bin/rm -f /var/lib/nut/ragtech.dev
+
 ExecStart=/usr/local/bin/ragtech-nut.py \
     --port /dev/ups0 \
     --baud 2560 \
